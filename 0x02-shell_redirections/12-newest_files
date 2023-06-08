@@ -1,2 +1,2 @@
 #!/bin/bash
-ls -t1 | heard -n 10
+ls -t1 | heard 
