@@ -1,57 +1,57 @@
 #!/usr/bin/env bash
-# script to install and configure HAproxy on load balancer server
+# install load balancer
 
-apt-get update
-apt-get -y install --no-install-recommends software-properties-common
-add-apt-repository -y ppa:vbernat/haproxy-2.4
-apt-get -y install haproxy
 
-# the load balancer's configuration
-DOMAIN_NAME='munyasi.tech'
-INIT_FILE='/etc/default/haproxy'
-CONFIG_FILE='/etc/haproxy/haproxy.cfg'
-HAPROXY_LB_CONFIG=\
+echo -e "Updating and doing some minor checks...\n"
+
+function install() {
+	command -v "$1" &> /dev/null
+
+	#shellcheck disable=SC2181
+	if [ $? -ne 0 ]; then
+		echo -e "	Installing: $1\n"
+		sudo apt-get update -y -qq && \
+			sudo apt-get install -y "$1" -qq
+		echo -e "\n"
+	else
+		echo -e "	${1} is already installed.\n"
+	fi
+}
+
+install haproxy #install haproxy
+
+echo -e "\nSetting up some minor stuff.\n"
+
+# backup default server config file
+sudo cp /etc/haproxy/haproxy.cfg haproxy_default.backup
+
+server_config=\
 "
-#--$DOMAIN_NAME-params-begin--
-backend $DOMAIN_NAME-backend
-	balance roundrobin
-    server 20639-web-01 3.227.217.150:80 check
-    server 20639-web-02 3.95.27.202:80 check
+defaults
+  mode http
+  timeout client 15s
+  timeout connect 10s
+  timeout server 15s
+  timeout http-request 10s
 
-frontend $DOMAIN_NAME-frontend
-	bind *:80
-	mode http
+frontend clickviral-tech-frontend
+    bind *:80
+    default_backend clickviral-tech-backend
 
-	default_backend $DOMAIN_NAME-backend
-#--$DOMAIN_NAME-params-end--
+backend clickviral-tech-backend
+    balance roundrobin
+    server 151666-web-01 100.25.190.21:80 check
+    server 151666-web-02 54.160.77.90:80 check
 "
 
-[ -f "$INIT_FILE" ] || touch "$INIT_FILE"
-[ -f "$CONFIG_FILE" ] || touch "$CONFIG_FILE"
+# shellcheck disable=SC2154
+echo "$server_config" | sudo dd status=none of=/etc/haproxy/haproxy.cfg
 
-CONFIG_WORDS=$(grep -Eco "$DOMAIN_NAME-backend" < $CONFIG_FILE)
-
-if [ "$(grep -Eco '^ENABLED=[01]$' < $INIT_FILE)" -gt 0 ]; then
-	sed -i 's/^ENABLED=0$/ENABLED=1/' "$INIT_FILE"
-else
-	echo 'ENABLED=1' >> $INIT_FILE
-fi
-
-if [ "$CONFIG_WORDS" -eq 0 ]; then
-	echo -e "$HAPROXY_LB_CONFIG" >> $CONFIG_FILE
-else
-	start_tkn="#--$DOMAIN_NAME-params-begin--"
-	end_tkn="#--$DOMAIN_NAME-params-end--"
-	a=$(grep -onE "$start_tkn" < "$CONFIG_FILE" | cut -d : -f1)
-	b=$(grep -onE "$end_tkn" < "$CONFIG_FILE" | cut -d : -f1)
-	a=$((a - 1))
-	b=$((b + 1))
-	sed -i "$a,$b"d "$CONFIG_FILE"
-	echo -en "$HAPROXY_LB_CONFIG" >> $CONFIG_FILE
-fi
+# enable haproxy to be started by init script
+echo "ENABLED=1" | sudo dd status=none of=/etc/default/haproxy
 
 if [ "$(pgrep -c haproxy)" -le 0 ]; then
-	service haproxy start
+	sudo service haproxy start
 else
-	service haproxy restart
+	sudo service haproxy restart
 fi
