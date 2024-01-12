@@ -52,8 +52,8 @@ frontend mlindwab.tech-frontend
 backend mlindwab.tech-backend
         balance roundrobin
         redirect scheme https if !{ ssl_fc }
-        server 20639-web-01 3.227.217.150:80 check
-        server 20639-web-02 3.95.27.202:80 check
+        server 449700-web-01 100.25.23.84:80 check
+        server 449700-web-02 100.27.4.28:80 check
 
 backend letsencrypt-backend
         server letsencrypt 127.0.0.1:54321
